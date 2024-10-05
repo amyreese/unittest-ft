@@ -1,16 +1,16 @@
-# PROJECT_NAME
+# unittest-ft
 
-PROJECT_DESCRIPTION
+Run tests in parallel with free threading
 
-[![version](https://img.shields.io/pypi/v/PACKAGE_NORMALIZED.svg)](https://pypi.org/project/PACKAGE_NORMALIZED)
-[![license](https://img.shields.io/pypi/l/PACKAGE_NORMALIZED.svg)](https://github.com/GITHUB_USERNAME/GITHUB_PROJECT/blob/main/LICENSE)
+[![version](https://img.shields.io/pypi/v/unittest-ft.svg)](https://pypi.org/project/unittest-ft)
+[![license](https://img.shields.io/pypi/l/unittest-ft.svg)](https://github.com/amyreese/unittest-ft/blob/main/LICENSE)
 
 
 Install
 -------
 
 ```shell-session
-$ pip install PACKAGE_NORMALIZED
+$ pip install unittest-ft
 ```
 
 
@@ -18,11 +18,11 @@ Usage
 -----
 
 ```py
-import PACKAGE_NAME
+import unittest_ft
 ```
 
 
 License
 -------
 
-PROJECT_NAME is copyright AUTHOR_NAME, and licensed under the MIT license.
+unittest-ft is copyright Amethyst Reese, and licensed under the MIT license.
