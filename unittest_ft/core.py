@@ -35,7 +35,7 @@ class FTTestResult(TestResult):
         if not isinstance(other, TestResult):
             return NotImplemented
         result = FTTestResult()
-        result.collectedDurations = self.collectedDurations + other.collectedDurations
+        # result.collectedDurations = self.collectedDurations + other.collectedDurations
         result.errors = self.errors + other.errors
         result.expectedFailures = self.expectedFailures + other.expectedFailures
         result.failures = self.failures + other.failures
@@ -49,7 +49,7 @@ class FTTestResult(TestResult):
     def __iadd__(self, other: object) -> Self:
         if not isinstance(other, TestResult):
             return NotImplemented
-        self.collectedDurations += other.collectedDurations
+        # self.collectedDurations += other.collectedDurations
         self.errors += other.errors
         self.expectedFailures += other.expectedFailures
         self.failures += other.failures
