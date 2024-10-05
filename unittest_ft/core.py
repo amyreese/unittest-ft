@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import importlib
 import logging
-import shutil
 import time
 from concurrent.futures import as_completed, ThreadPoolExecutor
 from typing import Generator, Self
@@ -98,7 +97,6 @@ def run(module: str) -> TestResult:
     pool = ThreadPoolExecutor(64)
     futs = [pool.submit(run_single_test, test_id) for test_id in test_ids]
 
-    width = shutil.get_terminal_size((80, 24)).columns - 20
     test_duration = 0
     result = FTTestResult()
 
