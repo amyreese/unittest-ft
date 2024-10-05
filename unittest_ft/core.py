@@ -7,10 +7,11 @@ import importlib
 import logging
 import time
 from concurrent.futures import as_completed, ThreadPoolExecutor
-from typing import Generator, Self
+from typing import Generator
 from unittest import TestCase, TestLoader, TestResult, TestSuite
 
 from rich import print
+from typing_extensions import Self
 
 LOG = logging.getLogger(__name__)
 
