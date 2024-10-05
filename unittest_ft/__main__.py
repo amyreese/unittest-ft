@@ -1,9 +1,7 @@
 # Copyright Amethyst Reese
 # Licensed under the MIT license
 
-
-def main() -> None:
-    pass
+from .cli import main
 
 
 if __name__ == "__main__":
