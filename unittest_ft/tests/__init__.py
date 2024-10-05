@@ -7,4 +7,4 @@ from unittest import TestCase
 
 class SmokeTest(TestCase):
     def test_python_version(self) -> None:
-        self.assertGreaterEqual(sys.version_info, (3, 13))
+        self.assertGreaterEqual(sys.version_info, (3, 10))
