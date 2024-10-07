@@ -17,6 +17,8 @@ from typing_extensions import Self
 
 LOG = logging.getLogger(__name__)
 
+DEFAULT_THREADS = (os.cpu_count() or 4) + 2
+
 
 class FTTestResult(TestResult):
     def __str__(self) -> str:
@@ -94,6 +96,7 @@ def run(
     *,
     randomize: bool = False,
     stress_test: bool = False,
+    threads: int = DEFAULT_THREADS,
 ) -> TestResult:
     loaded_module = importlib.import_module(module)
     loader = TestLoader()
@@ -110,7 +113,7 @@ def run(
         test_ids.sort()
 
     LOG.debug("ready to run %d tests:\n  %s", len(test_ids), "\n  ".join(test_ids))
-    pool = ThreadPoolExecutor((os.cpu_count() or 4) + 2)
+    pool = ThreadPoolExecutor(max_workers=threads)
     futs = [pool.submit(run_single_test, test_id) for test_id in test_ids]
 
     test_duration = 0
