@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
+import random
 import time
 from concurrent.futures import as_completed, ThreadPoolExecutor
 from typing import Generator
@@ -87,7 +89,12 @@ def format_ns(duration: int) -> str:
         return f"{duration / 1_000_000_000:.3f}s"
 
 
-def run(module: str) -> TestResult:
+def run(
+    module: str,
+    *,
+    randomize: bool = False,
+    stress_test: bool = False,
+) -> TestResult:
     loaded_module = importlib.import_module(module)
     loader = TestLoader()
     suite = loader.loadTestsFromModule(loaded_module)
@@ -95,7 +102,15 @@ def run(module: str) -> TestResult:
 
     before = time.monotonic_ns()
     test_ids = [test.id() for test in get_individual_tests(suite)]
-    pool = ThreadPoolExecutor(64)
+    if stress_test:
+        test_ids = test_ids * 10
+    if randomize:
+        random.shuffle(test_ids)
+    else:
+        test_ids.sort()
+
+    LOG.debug("ready to run %d tests:\n  %s", len(test_ids), "\n  ".join(test_ids))
+    pool = ThreadPoolExecutor((os.cpu_count() or 4) + 2)
     futs = [pool.submit(run_single_test, test_id) for test_id in test_ids]
 
     test_duration = 0
@@ -103,7 +118,10 @@ def run(module: str) -> TestResult:
 
     for fut in as_completed(futs):
         test_id, test_result, duration = fut.result()
-        print(f"{test_id} ... {'OK' if test_result.wasSuccessful() else 'FAIL'}")
+        print(
+            f"{test_id} ... {'OK' if test_result.wasSuccessful() else 'FAIL'} "
+            f" {format_ns(duration)}"
+        )
 
         test_duration += duration
         result += test_result
