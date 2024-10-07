@@ -1,8 +1,9 @@
 # Copyright Amethyst Reese
 # Licensed under the MIT license
 
+from __future__ import annotations
+
 import logging
-import os
 import sys
 from typing import NoReturn
 

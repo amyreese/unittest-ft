@@ -7,7 +7,7 @@ from unittest import expectedFailure, skip, TestCase
 
 class SmokeTest(TestCase):
     def test_python_version(self) -> None:
-        self.assertGreaterEqual(sys.version_info, (3, 10))
+        self.assertGreaterEqual(sys.version_info, (3, 8))
 
     def test_nothing(self) -> None:
         pass
