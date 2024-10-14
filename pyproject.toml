@@ -31,7 +31,7 @@ dev = [
     "flake8==7.1.1",
     "mypy==1.11.2",
     "ufmt==2.7.2",
-    "usort==1.0.8",
+    "usort==1.0.8.post1",
 ]
 
 [project.scripts]
