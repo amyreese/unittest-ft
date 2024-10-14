@@ -7,12 +7,13 @@ import importlib
 import logging
 import os
 import random
+import sys
 import time
-from concurrent.futures import as_completed, ThreadPoolExecutor
-from typing import Generator
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from typing import Any, Generator, TextIO
 from unittest import TestCase, TestLoader, TestResult, TestSuite
 
-from rich import print
+# from rich import print
 from typing_extensions import Self
 
 LOG = logging.getLogger(__name__)
@@ -21,17 +22,58 @@ DEFAULT_THREADS = (os.cpu_count() or 4) + 2
 
 
 class FTTestResult(TestResult):
+    def __init__(
+        self,
+        stream: TextIO | None = None,
+        descriptions: bool | None = None,
+        verbosity: int | None = None,
+    ) -> None:
+        super().__init__(stream=stream, descriptions=descriptions, verbosity=verbosity)
+        self.verbosity = verbosity or 1
+        self.before = time.monotonic_ns()
+        self.duration = 0
+        self.collected_duration = 0
+
+    def stopTest(self, test: Any) -> None:
+        super().stopTest(test)
+        self.duration = time.monotonic_ns() - self.before
+
+    def stopTestRun(self) -> None:
+        super().stopTestRun()
+        self.duration = time.monotonic_ns() - self.before
+
     def __str__(self) -> str:
         items = [(f"ERROR: {test_case}", trace) for test_case, trace in self.errors]
         items += [(f"FAIL: {test_case}", trace) for test_case, trace in self.failures]
 
         longest = max(len(label) for label, _ in items) if items else 70
 
-        msg = "\n".join(
+        msg = "\n"
+        msg += "\n".join(
             f"{'=' * longest}\n{label}\n{'-' * longest}\n{trace}"
             for label, trace in items
         )
         msg += "-" * longest
+        msg += f"\nRan {self.testsRun} tests in {format_ns(self.duration)}"
+
+        saved = self.collected_duration - self.duration
+        if saved > 0 and (saved / self.duration) > 0.10:
+            msg += f" (saved {format_ns(self.collected_duration - self.duration)})"
+        msg += "\n\n"
+
+        if self.wasSuccessful():
+            msg += "OK"
+        else:
+            parts = []
+            if self.errors:
+                parts += [f"errors={len(self.errors)}"]
+            if self.failures:
+                parts += [f"failures={len(self.failures)}"]
+            if self.skipped:
+                parts += [f"skipped={len(self.skipped)}"]
+            if self.expectedFailures:
+                parts += [f"expected failures={len(self.expectedFailures)}"]
+            msg += f"FAILED ({', '.join(parts)})"
 
         return msg
 
@@ -48,6 +90,8 @@ class FTTestResult(TestResult):
         result.unexpectedSuccesses = (
             self.unexpectedSuccesses + other.unexpectedSuccesses
         )
+        if isinstance(other, FTTestResult):
+            result.collected_duration = self.duration + other.duration
         return result
 
     def __iadd__(self, other: object) -> Self:
@@ -60,6 +104,8 @@ class FTTestResult(TestResult):
         self.skipped += other.skipped
         self.testsRun += other.testsRun
         self.unexpectedSuccesses += other.unexpectedSuccesses
+        if isinstance(other, FTTestResult):
+            self.collected_duration += other.duration
         return self
 
 
@@ -71,17 +117,15 @@ def get_individual_tests(suite: TestSuite) -> Generator[TestCase, None, None]:
             yield test
 
 
-def run_single_test(test_id: str) -> tuple[str, TestResult, int]:
+def run_single_test(test_id: str) -> tuple[str, FTTestResult]:
     LOG.debug("Loading test %s", test_id)
     loader = TestLoader()
-    result = FTTestResult(descriptions=True, verbosity=2)
     suite = loader.loadTestsFromName(test_id)
     LOG.debug("Running test %s", test_id)
-    before = time.monotonic_ns()
+    result = FTTestResult(descriptions=True, verbosity=2)
     suite.run(result)
-    duration = time.monotonic_ns() - before
     LOG.debug("Finished test %s", test_id)
-    return (test_id, result, duration)
+    return (test_id, result)
 
 
 def format_ns(duration: int) -> str:
@@ -97,13 +141,13 @@ def run(
     randomize: bool = False,
     stress_test: bool = False,
     threads: int = DEFAULT_THREADS,
+    verbosity: int = 1,
 ) -> TestResult:
     loaded_module = importlib.import_module(module)
     loader = TestLoader()
     suite = loader.loadTestsFromModule(loaded_module)
     LOG.debug("loaded %d test cases from %s", suite.countTestCases(), module)
 
-    before = time.monotonic_ns()
     test_ids = [test.id() for test in get_individual_tests(suite)]
     if stress_test:
         test_ids = test_ids * 10
@@ -114,33 +158,25 @@ def run(
 
     LOG.debug("ready to run %d tests:\n  %s", len(test_ids), "\n  ".join(test_ids))
     pool = ThreadPoolExecutor(max_workers=threads)
-    futs = [pool.submit(run_single_test, test_id) for test_id in test_ids]
+    futs = {pool.submit(run_single_test, test_id) for test_id in test_ids}
 
-    test_duration = 0
+    stream = sys.stdout
     result = FTTestResult()
+    while futs:
+        done, futs = wait(futs, timeout=0.1, return_when=FIRST_COMPLETED)
+        for fut in done:
+            test_id, test_result = fut.result()
+            if verbosity == 2:
+                stream.write(
+                    f"{test_id} ... {'OK' if test_result.wasSuccessful() else 'FAIL'} "
+                    f" {format_ns(test_result.duration)}\n"
+                )
+            elif verbosity == 1:
+                stream.write("." if test_result.wasSuccessful() else "F")
+            stream.flush()
+            result += test_result
+    result.stopTestRun()
 
-    for fut in as_completed(futs):
-        test_id, test_result, duration = fut.result()
-        print(
-            f"{test_id} ... {'OK' if test_result.wasSuccessful() else 'FAIL'} "
-            f" {format_ns(duration)}"
-        )
-
-        test_duration += duration
-        result += test_result
-
-    runner_duration = time.monotonic_ns() - before
-
-    print()
     print(result)
-    print(
-        f"Ran {len(test_ids)} tests in {format_ns(runner_duration)} "
-        f"(saved {format_ns(test_duration - runner_duration)})\n"
-    )
-
-    if result.wasSuccessful():
-        print("OK")
-    else:
-        print("FAILED")
 
     return result
