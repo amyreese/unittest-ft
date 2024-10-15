@@ -75,19 +75,20 @@ class FTTestResult(TestResult):
             msg += f" (saved {format_ns(self.collected_duration - self.duration)})"
         msg += "\n\n"
 
-        if self.wasSuccessful():
-            msg += "OK"
-        else:
-            parts = []
-            if self.errors:
-                parts += [f"errors={len(self.errors)}"]
-            if self.failures:
-                parts += [f"failures={len(self.failures)}"]
-            if self.skipped:
-                parts += [f"skipped={len(self.skipped)}"]
-            if self.expectedFailures:
-                parts += [f"expected failures={len(self.expectedFailures)}"]
-            msg += f"FAILED ({', '.join(parts)})"
+        msg += "OK" if self.wasSuccessful() else "FAILED"
+
+        parts = []
+        if self.errors:
+            parts += [f"errors={len(self.errors)}"]
+        if self.failures:
+            parts += [f"failures={len(self.failures)}"]
+        if self.skipped:
+            parts += [f"skipped={len(self.skipped)}"]
+        if self.expectedFailures:
+            parts += [f"expected failures={len(self.expectedFailures)}"]
+
+        if parts:
+            msg += f" ({', '.join(parts)})"
 
         return msg
 
