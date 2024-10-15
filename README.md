@@ -31,21 +31,23 @@ Usage
 Run your test suite:
 
 ```shell-session
-$ unittest-ft <module>
-...
-
+$ unittest-ft [<module>]
+s...xx.
 ----------------------------------------------------------------------
-Ran 7 tests in 497.55ms (saved 0.41ms)
+Ran 7 tests in 463.69ms
+
+OK (skipped=1, expected failures=2)
 ```
 
 If you can spare the time/cores, run a randomized stress test:
 
-```py
-$ unittest-ft --randomize --stress-test <module>
-...
-
+```shell-session
+$ unittest-ft --randomize --stress-test [<module>]
+.s...xs.xsxx.xx....xxx..xsxx.x.s.x...xs.xsxx....xx...s..ss............
 ----------------------------------------------------------------------
-Ran 70 tests in 1.306s (saved 10.679s)
+Ran 70 tests in 1.240s (saved 9.988s)
+
+OK (skipped=10, expected failures=20)
 ```
 
 
