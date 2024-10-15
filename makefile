@@ -21,7 +21,7 @@ venv: .venv
 	echo 'run `source .venv/bin/activate` to activate virtualenv'
 
 test:
-	python -m unittest_ft -rs $(PKG).tests
+	python -m unittest_ft -vrs $(PKG).tests
 	python -m mypy -p $(PKG)
 
 lint:
