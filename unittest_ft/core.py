@@ -9,11 +9,12 @@ import os
 import random
 import sys
 import time
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from collections import defaultdict
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from dataclasses import dataclass
 from typing import Any, Generator, TextIO
 from unittest import TestCase, TestLoader, TestResult, TestSuite
 
-# from rich import print
 from typing_extensions import Self
 
 LOG = logging.getLogger(__name__)
@@ -46,8 +47,6 @@ class FTTestResult(TestResult):
         self.duration = time.monotonic_ns() - self.before
 
     def __str__(self) -> str:
-        from collections import defaultdict
-
         items: dict[tuple[str, str], int] = defaultdict(int)
         for test_case, trace in self.errors:
             items[f"ERROR: {test_case}", trace] += 1
@@ -150,6 +149,44 @@ def format_ns(duration: int) -> str:
         return f"{duration / 1_000_000_000:.3f}s"
 
 
+@dataclass
+class Output:
+    futures: dict[Future[tuple[str, FTTestResult]], str]
+    stream: TextIO = sys.stdout
+    verbosity: int = 1
+
+    def __post_init__(self) -> None:
+        self.count = 0
+        self.total = len(self.futures)
+
+    def render(
+        self, future: Future[tuple[str, FTTestResult]], test_result: FTTestResult
+    ) -> None:
+        test_id = self.futures[future]
+        stream = self.stream
+        verbosity = self.verbosity
+
+        self.count += 1
+        if verbosity == 2:
+            stream.write(
+                f"[{self.count}/{self.total}] {test_id}"
+                f" ... {'OK' if test_result.wasSuccessful() else 'FAIL'} "
+                f" {format_ns(test_result.duration)}\n"
+            )
+        elif verbosity == 1:
+            if test_result.errors:
+                stream.write("E")
+            elif test_result.failures:
+                stream.write("F")
+            elif test_result.expectedFailures:
+                stream.write("x")
+            elif test_result.skipped:
+                stream.write("s")
+            else:
+                stream.write(".")
+        stream.flush()
+
+
 def run(
     module: str,
     *,
@@ -173,32 +210,17 @@ def run(
 
     LOG.debug("ready to run %d tests:\n  %s", len(test_ids), "\n  ".join(test_ids))
     pool = ThreadPoolExecutor(max_workers=threads)
-    futs = {pool.submit(run_single_test, test_id) for test_id in test_ids}
+    futures = {pool.submit(run_single_test, test_id): test_id for test_id in test_ids}
+    pending = set(futures)
 
-    stream = sys.stdout
+    output = Output(futures, verbosity=verbosity)
     result = FTTestResult(stress_test=stress_test)
-    while futs:
-        done, futs = wait(futs, timeout=0.1, return_when=FIRST_COMPLETED)
+    while pending:
+        done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
         for fut in done:
-            test_id, test_result = fut.result()
-            if verbosity == 2:
-                stream.write(
-                    f"{test_id} ... {'OK' if test_result.wasSuccessful() else 'FAIL'} "
-                    f" {format_ns(test_result.duration)}\n"
-                )
-            elif verbosity == 1:
-                if test_result.errors:
-                    stream.write("E")
-                elif test_result.failures:
-                    stream.write("F")
-                elif test_result.expectedFailures:
-                    stream.write("x")
-                elif test_result.skipped:
-                    stream.write("s")
-                else:
-                    stream.write(".")
-            stream.flush()
+            _, test_result = fut.result()
             result += test_result
+            output.render(fut, test_result)
     result.stopTestRun()
 
     print(result)
