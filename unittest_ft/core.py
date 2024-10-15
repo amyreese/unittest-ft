@@ -27,12 +27,15 @@ class FTTestResult(TestResult):
         stream: TextIO | None = None,
         descriptions: bool | None = None,
         verbosity: int | None = None,
+        *,
+        stress_test: bool = False,
     ) -> None:
         super().__init__(stream=stream, descriptions=descriptions, verbosity=verbosity)
         self.verbosity = verbosity or 1
         self.before = time.monotonic_ns()
         self.duration = 0
         self.collected_duration = 0
+        self.stress_test = stress_test
 
     def stopTest(self, test: Any) -> None:
         super().stopTest(test)
@@ -43,15 +46,26 @@ class FTTestResult(TestResult):
         self.duration = time.monotonic_ns() - self.before
 
     def __str__(self) -> str:
-        items = [(f"ERROR: {test_case}", trace) for test_case, trace in self.errors]
-        items += [(f"FAIL: {test_case}", trace) for test_case, trace in self.failures]
+        from collections import defaultdict
 
-        longest = max(len(label) for label, _ in items) if items else 70
+        items: dict[tuple[str, str], int] = defaultdict(int)
+        for test_case, trace in self.errors:
+            items[f"ERROR: {test_case}", trace] += 1
+        for test_case, trace in self.failures:
+            items[f"FAIL: {test_case}", trace] += 1
+
+        if self.stress_test:
+            results = {
+                f"{label} (x{count})": trace for (label, trace), count in items.items()
+            }
+        else:
+            results = {f"{label}": trace for (label, trace), count in items.items()}
+        longest = max(len(label) for label in results) if results else 70
 
         msg = "\n"
         msg += "\n".join(
             f"{'=' * longest}\n{label}\n{'-' * longest}\n{trace}"
-            for label, trace in items
+            for label, trace in results.items()
         )
         msg += "-" * longest
         msg += f"\nRan {self.testsRun} tests in {format_ns(self.duration)}"
@@ -61,19 +75,20 @@ class FTTestResult(TestResult):
             msg += f" (saved {format_ns(self.collected_duration - self.duration)})"
         msg += "\n\n"
 
-        if self.wasSuccessful():
-            msg += "OK"
-        else:
-            parts = []
-            if self.errors:
-                parts += [f"errors={len(self.errors)}"]
-            if self.failures:
-                parts += [f"failures={len(self.failures)}"]
-            if self.skipped:
-                parts += [f"skipped={len(self.skipped)}"]
-            if self.expectedFailures:
-                parts += [f"expected failures={len(self.expectedFailures)}"]
-            msg += f"FAILED ({', '.join(parts)})"
+        msg += "OK" if self.wasSuccessful() else "FAILED"
+
+        parts = []
+        if self.errors:
+            parts += [f"errors={len(self.errors)}"]
+        if self.failures:
+            parts += [f"failures={len(self.failures)}"]
+        if self.skipped:
+            parts += [f"skipped={len(self.skipped)}"]
+        if self.expectedFailures:
+            parts += [f"expected failures={len(self.expectedFailures)}"]
+
+        if parts:
+            msg += f" ({', '.join(parts)})"
 
         return msg
 
@@ -161,7 +176,7 @@ def run(
     futs = {pool.submit(run_single_test, test_id) for test_id in test_ids}
 
     stream = sys.stdout
-    result = FTTestResult()
+    result = FTTestResult(stress_test=stress_test)
     while futs:
         done, futs = wait(futs, timeout=0.1, return_when=FIRST_COMPLETED)
         for fut in done:
@@ -172,7 +187,16 @@ def run(
                     f" {format_ns(test_result.duration)}\n"
                 )
             elif verbosity == 1:
-                stream.write("." if test_result.wasSuccessful() else "F")
+                if test_result.errors:
+                    stream.write("E")
+                elif test_result.failures:
+                    stream.write("F")
+                elif test_result.expectedFailures:
+                    stream.write("x")
+                elif test_result.skipped:
+                    stream.write("s")
+                else:
+                    stream.write(".")
             stream.flush()
             result += test_result
     result.stopTestRun()
