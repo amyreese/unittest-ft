@@ -188,17 +188,23 @@ class Output:
 
 
 def run(
-    module: str,
+    module: str = "",
     *,
     randomize: bool = False,
     stress_test: bool = False,
     threads: int = DEFAULT_THREADS,
     verbosity: int = 1,
 ) -> TestResult:
-    loaded_module = importlib.import_module(module)
     loader = TestLoader()
-    suite = loader.loadTestsFromModule(loaded_module)
-    LOG.debug("loaded %d test cases from %s", suite.countTestCases(), module)
+    if module:
+        try:
+            loaded_module = importlib.import_module(module)
+            suite = loader.loadTestsFromModule(loaded_module)
+        except ImportError:
+            suite = loader.discover(module)
+    else:
+        suite = loader.discover(".")
+    LOG.debug("loaded %d test cases from %s", suite.countTestCases(), module or ".")
 
     test_ids = [test.id() for test in get_individual_tests(suite)]
     if stress_test:

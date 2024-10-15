@@ -26,7 +26,7 @@ from .core import DEFAULT_THREADS, run
     show_default=True,
     help="Number of threads to spawn for tests",
 )
-@click.argument("module")
+@click.argument("module", required=False)
 def main(
     debug: bool,
     verbose: bool,
