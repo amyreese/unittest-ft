@@ -187,7 +187,16 @@ def run(
                     f" {format_ns(test_result.duration)}\n"
                 )
             elif verbosity == 1:
-                stream.write("." if test_result.wasSuccessful() else "F")
+                if test_result.errors:
+                    stream.write("E")
+                elif test_result.failures:
+                    stream.write("F")
+                elif test_result.expectedFailures:
+                    stream.write("x")
+                elif test_result.skipped:
+                    stream.write("s")
+                else:
+                    stream.write(".")
             stream.flush()
             result += test_result
     result.stopTestRun()
