@@ -27,12 +27,15 @@ class FTTestResult(TestResult):
         stream: TextIO | None = None,
         descriptions: bool | None = None,
         verbosity: int | None = None,
+        *,
+        stress_test: bool = False,
     ) -> None:
         super().__init__(stream=stream, descriptions=descriptions, verbosity=verbosity)
         self.verbosity = verbosity or 1
         self.before = time.monotonic_ns()
         self.duration = 0
         self.collected_duration = 0
+        self.stress_test = stress_test
 
     def stopTest(self, test: Any) -> None:
         super().stopTest(test)
@@ -43,15 +46,26 @@ class FTTestResult(TestResult):
         self.duration = time.monotonic_ns() - self.before
 
     def __str__(self) -> str:
-        items = [(f"ERROR: {test_case}", trace) for test_case, trace in self.errors]
-        items += [(f"FAIL: {test_case}", trace) for test_case, trace in self.failures]
+        from collections import defaultdict
 
-        longest = max(len(label) for label, _ in items) if items else 70
+        items: dict[tuple[str, str], int] = defaultdict(int)
+        for test_case, trace in self.errors:
+            items[f"ERROR: {test_case}", trace] += 1
+        for test_case, trace in self.failures:
+            items[f"FAIL: {test_case}", trace] += 1
+
+        if self.stress_test:
+            results = {
+                f"{label} (x{count})": trace for (label, trace), count in items.items()
+            }
+        else:
+            results = {f"{label}": trace for (label, trace), count in items.items()}
+        longest = max(len(label) for label in results) if results else 70
 
         msg = "\n"
         msg += "\n".join(
             f"{'=' * longest}\n{label}\n{'-' * longest}\n{trace}"
-            for label, trace in items
+            for label, trace in results.items()
         )
         msg += "-" * longest
         msg += f"\nRan {self.testsRun} tests in {format_ns(self.duration)}"
@@ -161,7 +175,7 @@ def run(
     futs = {pool.submit(run_single_test, test_id) for test_id in test_ids}
 
     stream = sys.stdout
-    result = FTTestResult()
+    result = FTTestResult(stress_test=stress_test)
     while futs:
         done, futs = wait(futs, timeout=0.1, return_when=FIRST_COMPLETED)
         for fut in done:
