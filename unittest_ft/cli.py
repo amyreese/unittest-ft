@@ -9,10 +9,13 @@ from typing import NoReturn
 
 import click
 
+from .__version__ import __version__
+
 from .core import DEFAULT_THREADS, run
 
 
 @click.command()
+@click.version_option(__version__, "--version", "-V")
 @click.option("--debug", default=None, help="Enable debug logging")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--quiet", "-q", is_flag=True, help="Quiet output")
