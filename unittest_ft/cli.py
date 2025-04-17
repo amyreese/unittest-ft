@@ -19,6 +19,9 @@ from .core import DEFAULT_THREADS, run
 @click.option("--debug", default=None, help="Enable debug logging")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--quiet", "-q", is_flag=True, help="Quiet output")
+@click.option(
+    "--failfast", "-f", is_flag=True, help="Exit immediately on first failed test"
+)
 @click.option("--stress-test", "-s", is_flag=True, help="Run every test 10 times")
 @click.option("--randomize", "-r", is_flag=True, help="Randomize test order")
 @click.option(
@@ -35,6 +38,7 @@ def main(
     verbose: bool,
     quiet: bool,
     module: str,
+    failfast: bool,
     randomize: bool,
     stress_test: bool,
     threads: int,
@@ -46,6 +50,7 @@ def main(
     verbosity = 2 if verbose else 0 if quiet else 1
     result = run(
         module,
+        failfast=failfast,
         randomize=randomize,
         stress_test=stress_test,
         threads=threads,

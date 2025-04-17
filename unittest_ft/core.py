@@ -190,6 +190,7 @@ class Output:
 def run(
     module: str = "",
     *,
+    failfast: bool = False,
     randomize: bool = False,
     stress_test: bool = False,
     threads: int = DEFAULT_THREADS,
@@ -227,6 +228,10 @@ def run(
             _, test_result = fut.result()
             result += test_result
             output.render(fut, test_result)
+
+        if failfast and not result.wasSuccessful():
+            pool.shutdown(wait=False, cancel_futures=True)
+            pending.clear()
     result.stopTestRun()
 
     print(result)
