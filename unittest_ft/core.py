@@ -11,7 +11,8 @@ import sys
 import time
 from collections import defaultdict
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from itertools import groupby
 from typing import Any, Generator, TextIO
 from unittest import TestCase, TestLoader, TestResult, TestSuite
 
@@ -151,13 +152,13 @@ def format_ns(duration: int) -> str:
 
 @dataclass
 class Output:
-    futures: dict[Future[tuple[str, FTTestResult]], str]
+    total: int
+    futures: dict[Future[tuple[str, FTTestResult]], str] = field(default_factory=dict)
     stream: TextIO = sys.stdout
     verbosity: int = 1
 
     def __post_init__(self) -> None:
         self.count = 0
-        self.total = len(self.futures)
 
     def render(
         self, future: Future[tuple[str, FTTestResult]], test_result: FTTestResult
@@ -190,6 +191,7 @@ class Output:
 def run(
     module: str = "",
     *,
+    batched: bool = False,
     failfast: bool = False,
     randomize: bool = False,
     stress_test: bool = False,
@@ -215,23 +217,33 @@ def run(
     else:
         test_ids.sort()
 
+    if batched:
+        batches = [list(group) for _key, group in groupby(test_ids)]
+    else:
+        batches = [test_ids]
+
     LOG.debug("ready to run %d tests:\n  %s", len(test_ids), "\n  ".join(test_ids))
     pool = ThreadPoolExecutor(max_workers=threads)
-    futures = {pool.submit(run_single_test, test_id): test_id for test_id in test_ids}
-    pending = set(futures)
-
-    output = Output(futures, verbosity=verbosity)
+    output = Output(total=len(test_ids), verbosity=verbosity)
     result = FTTestResult(stress_test=stress_test)
-    while pending:
-        done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
-        for fut in done:
-            _, test_result = fut.result()
-            result += test_result
-            output.render(fut, test_result)
 
-        if failfast and not result.wasSuccessful():
-            pool.shutdown(wait=False, cancel_futures=True)
-            pending.clear()
+    while batches:
+        batch = batches.pop(0)
+        futures = {pool.submit(run_single_test, test_id): test_id for test_id in batch}
+        output.futures.update(futures)
+        pending = set(futures)
+
+        while pending:
+            done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
+            for fut in done:
+                _, test_result = fut.result()
+                result += test_result
+                output.render(fut, test_result)
+
+            if failfast and not result.wasSuccessful():
+                pool.shutdown(wait=False, cancel_futures=True)
+                pending.clear()
+                batches.clear()
     result.stopTestRun()
 
     print(result)
