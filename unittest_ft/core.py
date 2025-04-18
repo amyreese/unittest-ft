@@ -191,7 +191,7 @@ class Output:
 def run(
     module: str = "",
     *,
-    batched: bool = False,
+    batched_by_id: bool = False,
     failfast: bool = False,
     randomize: bool = False,
     stress_test: bool = False,
@@ -217,7 +217,7 @@ def run(
     else:
         test_ids.sort()
 
-    if batched:
+    if batched_by_id:
         batches = [list(group) for _key, group in groupby(test_ids)]
     else:
         batches = [test_ids]

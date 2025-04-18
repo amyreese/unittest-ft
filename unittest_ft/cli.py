@@ -19,7 +19,7 @@ from .core import DEFAULT_THREADS, run
 @click.option("--debug", default=None, help="Enable debug logging")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.option("--quiet", "-q", is_flag=True, help="Quiet output")
-@click.option("--batched", is_flag=True, help="Batch tests by test id")
+@click.option("--batched-by-id", is_flag=True, help="Batch tests by test id")
 @click.option(
     "--failfast", "-f", is_flag=True, help="Exit immediately on first failed test"
 )
@@ -39,7 +39,7 @@ def main(
     verbose: bool,
     quiet: bool,
     module: str,
-    batched: bool,
+    batched_by_id: bool,
     failfast: bool,
     randomize: bool,
     stress_test: bool,
@@ -52,7 +52,7 @@ def main(
     verbosity = 2 if verbose else 0 if quiet else 1
     result = run(
         module,
-        batched=batched,
+        batched_by_id=batched_by_id,
         failfast=failfast,
         randomize=randomize,
         stress_test=stress_test,
