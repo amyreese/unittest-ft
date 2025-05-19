@@ -25,20 +25,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set Up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          allow-prereleases: true
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
           cache-suffix: ${{ matrix.python-version }}
+          python-version: ${{ matrix.python-version }}
+          activate-environment: true
       - name: Install
-        run: |
-          uv python pin ${{ matrix.python-version }}
-          make EXTRAS=dev install
+        run: make EXTRAS=dev install
       - name: Test
         run: make test
       - name: Lint
@@ -49,13 +44,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
+          python-version: '3.12'
+          activate-environment: true
       - name: Install
         run: make EXTRAS=dev install
       - name: Build
