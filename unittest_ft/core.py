@@ -203,8 +203,11 @@ def run(
     verbosity: int = 1,
 ) -> TestResult:
     if catch_interrupt:
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        faulthandler.register(signal.SIGINT, chain=True)
+        if hasattr(faulthandler, "register"):
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+            faulthandler.register(signal.SIGINT, chain=True)
+        else:
+            LOG.warning("--catch-interrupt unsupported on %s", sys.platform)
 
     loader = TestLoader()
     if module:
