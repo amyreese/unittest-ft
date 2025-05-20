@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import faulthandler
 import importlib
 import logging
 import os
 import random
+
+import signal
 import sys
 import time
 from collections import defaultdict
@@ -192,12 +195,17 @@ def run(
     module: str = "",
     *,
     batched_by_id: bool = False,
+    catch_interrupt: bool = False,
     failfast: bool = False,
     randomize: bool = False,
     stress_test: bool = False,
     threads: int = DEFAULT_THREADS,
     verbosity: int = 1,
 ) -> TestResult:
+    if catch_interrupt:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        faulthandler.register(signal.SIGINT, chain=True)
+
     loader = TestLoader()
     if module:
         try:

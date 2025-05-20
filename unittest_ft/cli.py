@@ -23,6 +23,11 @@ from .core import DEFAULT_THREADS, run
 @click.option(
     "--failfast", "-f", is_flag=True, help="Exit immediately on first failed test"
 )
+@click.option(
+    "--catch-interrupt",
+    is_flag=True,
+    help="Catch SIGINT/CTRL-C and dump stack traces without aborting",
+)
 @click.option("--stress-test", "-s", is_flag=True, help="Run every test 10 times")
 @click.option("--randomize", "-r", is_flag=True, help="Randomize test order")
 @click.option(
@@ -40,6 +45,7 @@ def main(
     quiet: bool,
     module: str,
     batched_by_id: bool,
+    catch_interrupt: bool,
     failfast: bool,
     randomize: bool,
     stress_test: bool,
@@ -53,6 +59,7 @@ def main(
     result = run(
         module,
         batched_by_id=batched_by_id,
+        catch_interrupt=catch_interrupt,
         failfast=failfast,
         randomize=randomize,
         stress_test=stress_test,
