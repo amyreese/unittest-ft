@@ -16,7 +16,7 @@ from collections import defaultdict
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from itertools import groupby
-from typing import Any, Generator, TextIO
+from typing import Any, Callable, Generator, TextIO
 from unittest import TestCase, TestLoader, TestResult, TestSuite
 
 from typing_extensions import Self
@@ -135,10 +135,15 @@ def get_individual_tests(suite: TestSuite) -> Generator[TestCase, None, None]:
             yield test
 
 
-def run_single_test(test_id: str) -> tuple[str, FTTestResult]:
-    LOG.debug("Loading test %s", test_id)
-    loader = TestLoader()
-    suite = loader.loadTestsFromName(test_id)
+def run_single_test(case: TestCase | str) -> tuple[str, FTTestResult]:
+    if isinstance(case, str):
+        test_id = case
+        LOG.debug("Loading test %s", test_id)
+        loader = TestLoader()
+        suite = loader.loadTestsFromName(test_id)
+    else:
+        test_id = case.id()
+        suite = TestSuite([case])
     LOG.debug("Running test %s", test_id)
     result = FTTestResult(descriptions=True, verbosity=2)
     suite.run(result)
@@ -191,6 +196,69 @@ class Output:
         stream.flush()
 
 
+def run_suite(
+    suite: TestSuite,
+    *,
+    batched_by_id: bool = False,
+    failfast: bool = False,
+    randomize: bool = False,
+    stress_test: bool = False,
+    threads: int = DEFAULT_THREADS,
+    verbosity: int = 1,
+    random_seed: int | None = None,
+    exclude_case: Callable[[TestCase], bool] | None = None,
+) -> TestResult:
+    test_cases = {}
+    for test_case in get_individual_tests(suite):
+        if exclude_case is not None and exclude_case(test_case):
+            continue
+        test_cases[test_case.id()] = test_case
+    test_ids = sorted(test_cases)
+    if stress_test:
+        test_ids = sorted(test_ids * 10)
+    if randomize:
+        rnd = random.Random(random_seed)
+        rnd.shuffle(test_ids)
+
+    if batched_by_id:
+        batches = [list(group) for _key, group in groupby(test_ids)]
+    else:
+        batches = [test_ids]
+
+    LOG.debug(
+        "ready to run %d tests:\n  %s", len(test_ids), "\n  ".join(test_ids)
+    )
+    with ThreadPoolExecutor(max_workers=threads) as pool:
+        output = Output(total=len(test_ids), verbosity=verbosity)
+        result = FTTestResult(stress_test=stress_test)
+
+        while batches:
+            batch = batches.pop(0)
+            futures = {
+                pool.submit(run_single_test, test_cases[test_id]): test_id
+                for test_id in batch
+            }
+            output.futures.update(futures)
+            pending = set(futures)
+
+            while pending:
+                done, pending = wait(
+                    pending, timeout=0.1, return_when=FIRST_COMPLETED
+                )
+                for fut in done:
+                    _, test_result = fut.result()
+                    result += test_result
+                    output.render(fut, test_result)
+
+                if failfast and not result.wasSuccessful():
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    pending.clear()
+                    batches.clear()
+        result.stopTestRun()
+
+    return result
+
+
 def run(
     module: str = "",
     *,
@@ -201,6 +269,8 @@ def run(
     stress_test: bool = False,
     threads: int = DEFAULT_THREADS,
     verbosity: int = 1,
+    random_seed: int | None = None,
+    exclude_case: Callable[[TestCase], bool] | None = None,
 ) -> TestResult:
     if catch_interrupt:
         if hasattr(faulthandler, "register"):
@@ -218,45 +288,20 @@ def run(
             suite = loader.discover(module)
     else:
         suite = loader.discover(".")
-    LOG.debug("loaded %d test cases from %s", suite.countTestCases(), module or ".")
+    LOG.debug(
+        "loaded %d test cases from %s", suite.countTestCases(), module or "."
+    )
 
-    test_ids = [test.id() for test in get_individual_tests(suite)]
-    if stress_test:
-        test_ids = test_ids * 10
-    if randomize:
-        random.shuffle(test_ids)
-    else:
-        test_ids.sort()
-
-    if batched_by_id:
-        batches = [list(group) for _key, group in groupby(test_ids)]
-    else:
-        batches = [test_ids]
-
-    LOG.debug("ready to run %d tests:\n  %s", len(test_ids), "\n  ".join(test_ids))
-    pool = ThreadPoolExecutor(max_workers=threads)
-    output = Output(total=len(test_ids), verbosity=verbosity)
-    result = FTTestResult(stress_test=stress_test)
-
-    while batches:
-        batch = batches.pop(0)
-        futures = {pool.submit(run_single_test, test_id): test_id for test_id in batch}
-        output.futures.update(futures)
-        pending = set(futures)
-
-        while pending:
-            done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
-            for fut in done:
-                _, test_result = fut.result()
-                result += test_result
-                output.render(fut, test_result)
-
-            if failfast and not result.wasSuccessful():
-                pool.shutdown(wait=False, cancel_futures=True)
-                pending.clear()
-                batches.clear()
-    result.stopTestRun()
-
+    result = run_suite(
+        suite,
+        batched_by_id=batched_by_id,
+        failfast=failfast,
+        randomize=randomize,
+        stress_test=stress_test,
+        threads=threads,
+        verbosity=verbosity,
+        random_seed=random_seed,
+        exclude_case=exclude_case,
+    )
     print(result)
-
     return result
